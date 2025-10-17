@@ -1,3 +1,125 @@
+# MovieRecommender
+
+This repository contains a small movie recommendation system implemented with Scala + Apache Spark (MLlib ALS). It also includes a PySpark notebook version that was used on Databricks.
+
+This project was originally published as a blog post and demo that shows how to train an ALS model on the MovieLens 100k dataset and produce user/movie recommendations.
+
+## Repository layout (important files)
+
+- `src/main/scala/RecommenderTrain.scala` - Spark job that prepares rating data, trains an ALS model and saves it to a path.
+- `src/main/scala/Recommend.scala` - Spark job that loads the saved ALS model and returns recommendations for a user or for a movie.
+- `ml-100k/` - included copy of the MovieLens 100k dataset used for examples and tests. Contains training/test splits and helper scripts.
+- `pyspark_databricks_notebook/MovieRecommender.ipynb` - PySpark notebook (Databricks friendly) demonstrating the same workflow in Python.
+- `build.sbt` and `pom.xml` - build definitions for sbt and Maven. The project was developed with Scala 2.12/2.13 and Spark 2.x/3.x historically; check compatibility notes below.
+
+## Quick summary
+
+The Scala jobs are simple Spark MLlib programs using the RDD-based ALS API (org.apache.spark.mllib.recommendation.ALS). They expect the MovieLens `u.data` and `u.item` files as input and will save/load a `MatrixFactorizationModel` to/from a path.
+
+High-level commands (examples):
+
+Train model (example using `spark-submit`):
+
+```bash
+spark-submit --master local[*] --class RecommenderTrain target/MovieRecommender-1.0.jar
+```
+
+Recommend for a movie (example):
+
+```bash
+spark-submit --master local[*] --class Recommend target/MovieRecommender-1.0.jar --M 5
+```
+
+Recommend for a user (example):
+
+```bash
+spark-submit --master local[*] --class Recommend target/MovieRecommender-1.0.jar --U 13
+```
+
+The examples above assume you built the project with Maven and produced `target/MovieRecommender-1.0.jar` (see build instructions below). Adjust the `--master` and JAR path for your environment.
+
+## Prerequisites
+
+- Java 8+ (JDK 11 recommended)
+- Scala (2.12.x or 2.13.x depending on the Spark build you use)
+- Apache Spark (match Spark version to the libraries used when building; the project historically used Spark MLlib's RDD-based ALS)
+- sbt or Maven to build the JAR
+
+Note: The provided `build.sbt` and `pom.xml` contain example dependency coordinates. Verify the Spark and Scala versions match the cluster/runtime you will execute the job on. On many clusters you should mark Spark as "provided" and build a thin or shaded JAR accordingly.
+
+## Dataset
+
+This project uses the MovieLens 100k dataset. A copy of the dataset is included in `ml-100k/` in this repo (u.data and u.item). If you want to download a fresh copy:
+
+  wget https://files.grouplens.org/datasets/movielens/ml-100k.zip
+  unzip ml-100k.zip
+
+The important files used by the Scala code are:
+
+- `u.data` — rating records: user id, item id, rating, timestamp (tab-separated)
+- `u.item` — movie metadata: movie id | movie title | ... (pipe-separated)
+
+## How to build
+
+Choose sbt or maven depending on your tooling. The repository contains both files.
+
+Using Maven (recommended for this repo):
+
+The repository contains a `pom.xml`. Build the project with Maven to produce `target/MovieRecommender-1.0.jar`:
+
+```bash
+mvn -DskipTests package
+```
+
+Then run `spark-submit` using the examples above. The produced JAR will be `target/MovieRecommender-1.0.jar` according to the `artifactId`/`version` in `pom.xml`.
+
+Optional: using sbt
+
+If you prefer sbt for development you can still use it to compile and create an assembly JAR, but Maven is the primary build used in this project:
+
+```bash
+sbt compile
+sbt assembly   # optional, requires sbt-assembly plugin
+```
+
+## How to run locally (small test)
+
+1. Ensure you have Spark installed and `spark-submit` on PATH.
+2. Build the JAR (see above).
+3. Train locally (example uses local file paths that are set in the Scala files):
+
+  spark-submit --class RecommenderTrain --master local[2] path/to/MovieRecommender.jar
+
+4. After training, the model is saved to the model path configured inside `RecommenderTrain.scala` (default in source: `ml-100k/ALSmodel` in this repo). You can adjust paths by editing the Scala source or passing configuration via environment/arg parsing (not currently implemented).
+
+5. Generate recommendations for a user (example):
+
+  spark-submit --class Recommend --master local[2] path/to/MovieRecommender.jar --U 100
+
+6. Generate recommendations for a movie (example):
+
+  spark-submit --class Recommend --master local[2] path/to/MovieRecommender.jar --M 200
+
+## Notes about configuration and paths
+
+- The Scala programs hard-code local file paths for quick testing (see `dataPath`, `modelPath`, `checkpointPath` variables in the sources). For production or cluster runs, you should change these to HDFS paths (e.g., `hdfs:///user/<you>/movie/...`) or add simple CLI parsing.
+- The code uses the old RDD-based MLlib API (`org.apache.spark.mllib.recommendation.ALS`). Newer Spark versions recommend the DataFrame-based API under `org.apache.spark.ml.recommendation` (ALS estimator). The repo keeps the simpler RDD API for demonstration purposes.
+
+## PySpark notebook
+
+The `pyspark_databricks_notebook/MovieRecommender.ipynb` notebook contains a runnable Databricks-friendly PySpark version that demonstrates the same workflow: read `u.data`, train ALS, and map movie IDs to titles before printing recommendations.
+
+## Development suggestions / TODOs
+
+- Add CLI options (or config file) to `RecommenderTrain.scala` and `Recommend.scala` to allow passing paths, hyperparameters, and master settings instead of hard-coded paths.
+- Provide an sbt-assembly-generated fat JAR or update CI to produce release artifacts.
+- Migrate to the DataFrame-based `org.apache.spark.ml.recommendation.ALS` for better integration with Spark SQL and modern APIs.
+
+## Contact / origin
+
+This repo is based on a blog post demonstrating building a recommendation system with Scala, Spark, and Hadoop. See the original article for background and diagrams.
+
+If you want specific changes to the code (parameterize paths, add CLI flags, create an assembly JAR, or migrate to the DataFrame ALS), tell me which change you'd like first and I will implement it.
 ![](imgs/banner.jpg)
 *(Photo by <a href="https://unsplash.com/@tysonmoultrie?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Tyson Moultrie</a> on <a href="https://unsplash.com/s/photos/movie?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Unsplash</a>)</p>*
 
